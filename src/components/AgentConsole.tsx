@@ -1,276 +1,177 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Cpu, Clock, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Activity, Clock, CheckCircle, AlertTriangle, Cpu } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
 const AgentConsole = () => {
-  const [selectedAgent, setSelectedAgent] = useState('agent-001');
+  // Fetch agents data
+  const { data: agents, isLoading: agentsLoading } = useQuery({
+    queryKey: ['agents'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agents')
+        .select('*')
+        .order('trust_score', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  const agents = [
-    {
-      id: 'agent-001',
-      name: 'DataMiner Pro',
-      protocol: 'NLWeb',
-      trustScore: 96.8,
-      status: 'active',
-      activeTasks: 3,
-      completedTasks: 127,
-      revenue: 245.67,
-      lastActivity: '2 minutes ago'
+  // Fetch recent tasks
+  const { data: recentTasks, isLoading: tasksLoading } = useQuery({
+    queryKey: ['recent-tasks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*, agents(name, protocol)')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (error) throw error;
+      return data;
     },
-    {
-      id: 'agent-002',
-      name: 'TextAnalyzer AI',
-      protocol: 'MCP',
-      trustScore: 94.2,
-      status: 'active',
-      activeTasks: 2,
-      completedTasks: 89,
-      revenue: 189.34,
-      lastActivity: '5 minutes ago'
-    },
-    {
-      id: 'agent-003',
-      name: 'CodeGenerator Bot',
-      protocol: 'A2A',
-      trustScore: 91.5,
-      status: 'idle',
-      activeTasks: 0,
-      completedTasks: 156,
-      revenue: 298.12,
-      lastActivity: '1 hour ago'
-    },
-    {
-      id: 'agent-004',
-      name: 'ImageProcessor X',
-      protocol: 'NLWeb',
-      trustScore: 98.1,
-      status: 'active',
-      activeTasks: 5,
-      completedTasks: 203,
-      revenue: 412.89,
-      lastActivity: '1 minute ago'
-    }
-  ];
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'text-green-400 border-green-400';
-      case 'idle': return 'text-yellow-400 border-yellow-400';
-      case 'error': return 'text-red-400 border-red-400';
-      default: return 'text-gray-400 border-gray-400';
-    }
-  };
+  });
 
   const getProtocolColor = (protocol: string) => {
-    switch (protocol) {
-      case 'NLWeb': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'MCP': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      case 'A2A': return 'bg-green-500/20 text-green-400 border-green-500/30';
-      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-    }
+    const colors = {
+      nlweb: 'bg-blue-500',
+      mcp: 'bg-purple-500',
+      a2a: 'bg-green-500'
+    };
+    return colors[protocol as keyof typeof colors] || 'bg-gray-500';
   };
 
-  const selectedAgentData = agents.find(agent => agent.id === selectedAgent);
-
-  const recentLogs = [
-    { time: '14:32:15', level: 'INFO', message: 'Task delegated to TextAnalyzer AI via MCP protocol', taskId: 'T-2024-001' },
-    { time: '14:31:48', level: 'SUCCESS', message: 'Image processing completed successfully', taskId: 'T-2024-002' },
-    { time: '14:30:22', level: 'WARNING', message: 'Trust score dropped below threshold for Agent-005', taskId: 'T-2024-003' },
-    { time: '14:29:55', level: 'INFO', message: 'New agent registered: CodeReviewer Pro', taskId: 'T-2024-004' },
-    { time: '14:28:11', level: 'ERROR', message: 'Connection timeout with external API', taskId: 'T-2024-005' }
-  ];
-
-  const getLogIcon = (level: string) => {
-    switch (level) {
-      case 'SUCCESS': return <CheckCircle className="w-4 h-4 text-green-400" />;
-      case 'WARNING': return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
-      case 'ERROR': return <XCircle className="w-4 h-4 text-red-400" />;
-      default: return <Clock className="w-4 h-4 text-blue-400" />;
-    }
+  const getStatusColor = (status: string) => {
+    const colors = {
+      pending: 'text-yellow-400',
+      assigned: 'text-blue-400',
+      in_progress: 'text-purple-400',
+      completed: 'text-green-400',
+      failed: 'text-red-400',
+      cancelled: 'text-gray-400'
+    };
+    return colors[status as keyof typeof colors] || 'text-gray-400';
   };
+
+  if (agentsLoading || tasksLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Agent List */}
-        <Card className="bg-slate-800/50 border-slate-700 lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-white">Active Agents</CardTitle>
-            <CardDescription className="text-slate-400">
-              Manage and monitor your AI agents
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-96">
-              <div className="space-y-3">
-                {agents.map((agent) => (
-                  <div
-                    key={agent.id}
-                    className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                      selectedAgent === agent.id 
-                        ? 'bg-slate-700/50 border-slate-600' 
-                        : 'bg-slate-800/30 border-slate-700 hover:bg-slate-700/30'
-                    }`}
-                    onClick={() => setSelectedAgent(agent.id)}
+      {/* Agent Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {agents?.map((agent) => (
+          <Card key={agent.id} className="bg-slate-800/50 border-slate-700">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg text-white">{agent.name}</CardTitle>
+                <div className="flex items-center space-x-2">
+                  <Badge 
+                    variant="outline" 
+                    className={`${getProtocolColor(agent.protocol)} text-white border-0`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-white text-sm">{agent.name}</h3>
-                      <Badge variant="outline" className={getStatusColor(agent.status)}>
-                        {agent.status}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge className={getProtocolColor(agent.protocol)}>
-                        {agent.protocol}
-                      </Badge>
-                      <div className="flex items-center space-x-1">
-                        <Shield className="w-3 h-3 text-green-400" />
-                        <span className="text-xs text-green-400">{agent.trustScore}%</span>
-                      </div>
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {agent.activeTasks} active • {agent.completedTasks} completed
-                    </div>
-                  </div>
-                ))}
+                    {agent.protocol.toUpperCase()}
+                  </Badge>
+                  <div className={`w-2 h-2 rounded-full ${agent.is_active ? 'bg-green-400' : 'bg-red-400'}`} />
+                </div>
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+              <CardDescription className="text-slate-400">
+                Trust Score: {agent.trust_score}%
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Progress value={agent.trust_score} className="h-2" />
+                
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-slate-400">Status:</span>
+                    <div className={`font-medium ${agent.is_active ? 'text-green-400' : 'text-red-400'}`}>
+                      {agent.is_active ? 'Active' : 'Inactive'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Last Active:</span>
+                    <div className="text-white font-medium">
+                      {agent.last_active ? 
+                        new Date(agent.last_active).toLocaleDateString() : 
+                        'Never'
+                      }
+                    </div>
+                  </div>
+                </div>
 
-        {/* Agent Details */}
-        <Card className="bg-slate-800/50 border-slate-700 lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-white">
-              {selectedAgentData?.name} Details
-            </CardTitle>
-            <CardDescription className="text-slate-400">
-              Comprehensive agent performance and status
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {selectedAgentData && (
-              <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-slate-700/50">
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                  <TabsTrigger value="performance">Performance</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-sm text-slate-400">Trust Score</label>
-                        <div className="flex items-center space-x-2 mt-1">
-                          <Progress value={selectedAgentData.trustScore} className="flex-1" />
-                          <span className="text-sm font-semibold text-green-400">
-                            {selectedAgentData.trustScore}%
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm text-slate-400">Protocol</label>
-                        <div className="mt-1">
-                          <Badge className={getProtocolColor(selectedAgentData.protocol)}>
-                            {selectedAgentData.protocol}
+                {agent.capabilities && Object.keys(agent.capabilities).length > 0 && (
+                  <div>
+                    <span className="text-slate-400 text-sm">Capabilities:</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {Object.entries(agent.capabilities).map(([key, value]) => 
+                        value && (
+                          <Badge key={key} variant="secondary" className="text-xs">
+                            {key.replace('_', ' ')}
                           </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-sm text-slate-400">Revenue Generated</label>
-                        <div className="text-lg font-semibold text-white mt-1">
-                          ${selectedAgentData.revenue.toFixed(2)}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm text-slate-400">Last Activity</label>
-                        <div className="text-sm text-slate-300 mt-1">
-                          {selectedAgentData.lastActivity}
-                        </div>
-                      </div>
+                        )
+                      )}
                     </div>
                   </div>
-                </TabsContent>
-
-                <TabsContent value="tasks" className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Card className="bg-slate-700/30 border-slate-600">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm text-slate-300">Active Tasks</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-white">
-                          {selectedAgentData.activeTasks}
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-slate-700/30 border-slate-600">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm text-slate-300">Completed</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-white">
-                          {selectedAgentData.completedTasks}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="performance" className="space-y-4 mt-4">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-sm text-slate-400">Success Rate</label>
-                      <Progress value={97.5} className="mt-1" />
-                      <span className="text-xs text-slate-400">97.5% success rate</span>
-                    </div>
-                    <div>
-                      <label className="text-sm text-slate-400">Response Time</label>
-                      <Progress value={85} className="mt-1" />
-                      <span className="text-xs text-slate-400">1.2s avg response</span>
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            )}
-          </CardContent>
-        </Card>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Recent Activity Logs */}
+      {/* Recent Tasks */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">Recent Activity Logs</CardTitle>
+          <CardTitle className="text-white flex items-center">
+            <Activity className="w-5 h-5 mr-2" />
+            Recent Tasks
+          </CardTitle>
           <CardDescription className="text-slate-400">
-            Real-time system activity and agent interactions
+            Latest task executions across all agents
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-64">
-            <div className="space-y-3">
-              {recentLogs.map((log, index) => (
-                <div key={index} className="flex items-start space-x-3 p-3 rounded-lg bg-slate-700/30 border border-slate-600">
-                  {getLogIcon(log.level)}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-white">{log.message}</span>
-                      <span className="text-xs text-slate-400">{log.time}</span>
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1">Task ID: {log.taskId}</div>
+          <div className="space-y-4">
+            {recentTasks?.map((task) => (
+              <div key={task.id} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getProtocolColor(task.agents?.protocol || '')}`}>
+                    <Cpu className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-white font-medium">{task.agents?.name}</div>
+                    <div className="text-slate-400 text-sm">{task.task_type.replace('_', ' ')}</div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
+                <div className="flex items-center space-x-4">
+                  <div className="text-right">
+                    <div className={`font-medium ${getStatusColor(task.status)}`}>
+                      {task.status.replace('_', ' ')}
+                    </div>
+                    <div className="text-slate-400 text-sm">
+                      {new Date(task.created_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  {task.status === 'completed' && <CheckCircle className="w-5 h-5 text-green-400" />}
+                  {task.status === 'failed' && <AlertTriangle className="w-5 h-5 text-red-400" />}
+                  {task.status === 'in_progress' && <Clock className="w-5 h-5 text-blue-400" />}
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>
