@@ -5,12 +5,13 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Shield, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import TrustEngineMetrics from './TrustEngineMetrics';
 
 const TrustEngineMonitor = () => {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [calculationResults, setCalculationResults] = useState<any>(null);
+  const queryClient = useQueryClient();
 
   // Fetch trust events
   const { data: trustEvents, isLoading: eventsLoading } = useQuery({
