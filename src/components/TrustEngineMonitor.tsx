@@ -1,13 +1,17 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Shield, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Shield, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import TrustEngineMetrics from './TrustEngineMetrics';
 
 const TrustEngineMonitor = () => {
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [calculationResults, setCalculationResults] = useState<any>(null);
+
   // Fetch trust events
   const { data: trustEvents, isLoading: eventsLoading } = useQuery({
     queryKey: ['trust-events'],
@@ -61,10 +65,66 @@ const TrustEngineMonitor = () => {
     return { label: 'Needs Review', color: 'text-red-400' };
   };
 
+  const calculateTrustScore = async (agentId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('calculate-trust-score', {
+        body: { agent_id: agentId }
+      });
+
+      if (error) throw error;
+      
+      setCalculationResults(data);
+      setSelectedAgent(agentId);
+      
+      // Refetch data to show updated scores
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['trust-events'] }),
+        queryClient.invalidateQueries({ queryKey: ['agents-trust'] })
+      ]);
+    } catch (error) {
+      console.error('Error calculating trust score:', error);
+    }
+  };
+
   if (eventsLoading || agentsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+      </div>
+    );
+  }
+
+  // If an agent is selected and we have calculation results, show detailed metrics
+  if (selectedAgent && calculationResults) {
+    const agent = agents?.find(a => a.id === selectedAgent);
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setSelectedAgent(null);
+              setCalculationResults(null);
+            }}
+            className="text-slate-300 border-slate-600 hover:bg-slate-700"
+          >
+            ← Back to Overview
+          </Button>
+          <Button
+            onClick={() => calculateTrustScore(selectedAgent)}
+            className="flex items-center space-x-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Recalculate</span>
+          </Button>
+        </div>
+        
+        <TrustEngineMetrics
+          metrics={calculationResults.metrics}
+          adjustments={calculationResults.adjustments}
+          agentName={agent?.name || 'Unknown Agent'}
+          trustScore={calculationResults.trust_score}
+        />
       </div>
     );
   }
@@ -124,7 +184,7 @@ const TrustEngineMonitor = () => {
           <CardHeader>
             <CardTitle className="text-white">Agent Trust Rankings</CardTitle>
             <CardDescription className="text-slate-400">
-              Current trust scores across all agents
+              Click on an agent to view detailed trust analysis
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -132,7 +192,11 @@ const TrustEngineMonitor = () => {
               {agents?.map((agent, index) => {
                 const trustLevel = getTrustLevel(agent.trust_score);
                 return (
-                  <div key={agent.id} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                  <div 
+                    key={agent.id} 
+                    className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 cursor-pointer transition-colors"
+                    onClick={() => calculateTrustScore(agent.id)}
+                  >
                     <div className="flex items-center space-x-3">
                       <div className="text-slate-400 font-mono text-sm w-6">
                         #{index + 1}
@@ -165,7 +229,7 @@ const TrustEngineMonitor = () => {
           <CardHeader>
             <CardTitle className="text-white">Recent Trust Events</CardTitle>
             <CardDescription className="text-slate-400">
-              Latest trust score changes and events
+              Latest trust score changes and trigger activations
             </CardDescription>
           </CardHeader>
           <CardContent>
