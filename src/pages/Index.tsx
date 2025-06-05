@@ -10,7 +10,8 @@ import TaskRoutingDashboard from '@/components/TaskRoutingDashboard';
 import AuditExplorer from '@/components/AuditExplorer';
 import TrustEngineMonitor from '@/components/TrustEngineMonitor';
 import BillingOverview from '@/components/BillingOverview';
-import { Shield, Cpu, Network, DollarSign, FileText } from 'lucide-react';
+import DemoScenarios from '@/components/DemoScenarios';
+import { Shield, Cpu, Network, DollarSign, FileText, Play } from 'lucide-react';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('console');
@@ -102,7 +103,7 @@ const Index = () => {
 
         {/* Main Dashboard Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-slate-800/50 border-slate-700">
+          <TabsList className="grid w-full grid-cols-6 bg-slate-800/50 border-slate-700">
             <TabsTrigger value="console" className="data-[state=active]:bg-slate-700">
               <Cpu className="w-4 h-4 mr-2" />
               Agent Console
@@ -122,6 +123,10 @@ const Index = () => {
             <TabsTrigger value="billing" className="data-[state=active]:bg-slate-700">
               <DollarSign className="w-4 h-4 mr-2" />
               Billing
+            </TabsTrigger>
+            <TabsTrigger value="demos" className="data-[state=active]:bg-slate-700">
+              <Play className="w-4 h-4 mr-2" />
+              Demo Scenarios
             </TabsTrigger>
           </TabsList>
 
@@ -144,6 +149,10 @@ const Index = () => {
 
             <TabsContent value="billing" className="space-y-6">
               <BillingOverview />
+            </TabsContent>
+
+            <TabsContent value="demos" className="space-y-6">
+              <DemoScenarios />
             </TabsContent>
           </div>
         </Tabs>
