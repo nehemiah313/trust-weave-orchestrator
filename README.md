@@ -71,3 +71,13 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Git helper script
+
+Use `scripts/push_changes.sh` to automatically create a `feature/agent-orchestration-core` branch for your pending work and push it to `origin`.
+
+```sh
+./scripts/push_changes.sh "Your commit message"
+```
+
+If there are no changes, the script exits without creating a commit.
