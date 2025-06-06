@@ -183,7 +183,9 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
     performance_drift: performanceDrift,
     anomaly_score: anomalyScore,
     recent_success_rate: recentSuccessRate,
-    sla_compliance: totalTasks > 0 ? (withinSLA / completedTasks.length) * 100 : 100
+    sla_compliance: completedTasks.length > 0
+      ? (withinSLA / completedTasks.length) * 100
+      : undefined
   }
 }
 
@@ -237,7 +239,7 @@ function calculateFinalTrustScore(metrics: any, adjustments: any) {
   const completionScore = metrics.completion_rate
   const consistencyScore = Math.max(0, 100 - metrics.performance_drift * 2) // Penalize drift
   const anomalyScore = Math.max(0, 100 - metrics.anomaly_score) // Penalize anomalies
-  const slaScore = metrics.sla_compliance
+  const slaScore = metrics.sla_compliance ?? 100
 
   // Weighted average of all factors
   const baseScore = (
@@ -251,7 +253,9 @@ function calculateFinalTrustScore(metrics: any, adjustments: any) {
   // Apply trigger adjustments
   const adjustedScore = baseScore + adjustments.delayed_penalty + adjustments.sla_bonus
 
-  return Math.min(100, Math.max(0, adjustedScore))
+  const finalScore = Math.min(100, Math.max(0, adjustedScore))
+  console.log('[TRUST] Recalculated score:', finalScore)
+  return finalScore
 }
 
 function generateTrustEventReason(metrics: any, adjustments: any, delta: number) {
