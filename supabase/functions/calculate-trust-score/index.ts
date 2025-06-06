@@ -7,6 +7,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const PATENT_CLAIM_MAP: Record<string, string> = {
+  latency_weight: 'PC-001',
+  completion_rate: 'PC-002',
+  consistency_drift: 'PC-003',
+  anomaly_detection: 'PC-004',
+  sla_compliance: 'PC-005',
+  delayed_tasks_penalty: 'PC-006',
+  sla_compliance_bonus: 'PC-007',
+  weighted_average: 'PC-008',
+  final_score: 'PC-009'
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -47,14 +59,19 @@ serve(async (req) => {
       throw trustEventsError
     }
 
+    const ruleLog: { rule: string; claim_id: string; value: number }[] = []
+    const logRule = (rule: string, value: number) => {
+      ruleLog.push({ rule, claim_id: PATENT_CLAIM_MAP[rule] || 'N/A', value })
+    }
+
     // Calculate advanced trust metrics
     const trustMetrics = calculateAdvancedTrustMetrics(tasks, trustEvents)
-    
+
     // Apply trust triggers
-    const trustAdjustments = applyTrustTriggers(tasks, agent_id)
-    
+    const trustAdjustments = applyTrustTriggers(tasks, agent_id, logRule)
+
     // Calculate final trust score
-    const newTrustScore = calculateFinalTrustScore(trustMetrics, trustAdjustments)
+    const newTrustScore = calculateFinalTrustScore(trustMetrics, trustAdjustments, logRule)
 
     // Get current agent trust score
     const { data: currentAgent } = await supabaseClient
@@ -91,9 +108,10 @@ serve(async (req) => {
         event_type: eventType,
         delta,
         reason,
-        metadata: { 
+        metadata: {
           ...trustMetrics,
           adjustments: trustAdjustments,
+          rules: ruleLog,
           calculation_timestamp: new Date().toISOString()
         }
       })
@@ -101,12 +119,13 @@ serve(async (req) => {
     console.log(`Trust score updated for agent ${agent_id}: ${previousScore} -> ${finalScore} (Δ${delta.toFixed(2)})`)
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         trust_score: finalScore,
         delta,
         metrics: trustMetrics,
         adjustments: trustAdjustments,
-        reason
+        reason,
+        rules: ruleLog
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -187,7 +206,7 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
   }
 }
 
-function applyTrustTriggers(tasks: any[], agentId: string) {
+function applyTrustTriggers(tasks: any[], agentId: string, log: (rule: string, value: number) => void) {
   const fiveMinutesAgo = new Date()
   fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5)
 
@@ -213,6 +232,7 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
     adjustments.delayed_penalty = -15 // Significant penalty
     adjustments.trigger_applied.push('delayed_tasks_penalty')
     console.log(`Applied delayed tasks penalty for agent ${agentId}: ${recentDelayedTasks.length} delayed tasks`)
+    log('delayed_tasks_penalty', adjustments.delayed_penalty)
   }
 
   // Trigger 2: Trust ↑ if 5 verified completions within SLA
@@ -226,18 +246,24 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
     adjustments.sla_bonus = 10 // Reward for excellent performance
     adjustments.trigger_applied.push('sla_compliance_bonus')
     console.log(`Applied SLA compliance bonus for agent ${agentId}: ${recentCompletedWithinSLA.length} tasks within SLA`)
+    log('sla_compliance_bonus', adjustments.sla_bonus)
   }
 
   return adjustments
 }
 
-function calculateFinalTrustScore(metrics: any, adjustments: any) {
+function calculateFinalTrustScore(metrics: any, adjustments: any, log: (rule: string, value: number) => void) {
   // Base score calculation with weighted factors
   const latencyScore = Math.max(0, 100 - (metrics.avg_latency_ms / (5 * 60 * 1000)) * 50) // Penalize latency
+  log('latency_weight', latencyScore)
   const completionScore = metrics.completion_rate
+  log('completion_rate', completionScore)
   const consistencyScore = Math.max(0, 100 - metrics.performance_drift * 2) // Penalize drift
+  log('consistency_drift', consistencyScore)
   const anomalyScore = Math.max(0, 100 - metrics.anomaly_score) // Penalize anomalies
+  log('anomaly_detection', anomalyScore)
   const slaScore = metrics.sla_compliance
+  log('sla_compliance', slaScore)
 
   // Weighted average of all factors
   const baseScore = (
@@ -247,9 +273,11 @@ function calculateFinalTrustScore(metrics: any, adjustments: any) {
     anomalyScore * 0.15 +      // Anomaly detection weight: 15%
     slaScore * 0.10            // SLA compliance weight: 10%
   )
+  log('weighted_average', baseScore)
 
   // Apply trigger adjustments
   const adjustedScore = baseScore + adjustments.delayed_penalty + adjustments.sla_bonus
+  log('final_score', adjustedScore)
 
   return Math.min(100, Math.max(0, adjustedScore))
 }
