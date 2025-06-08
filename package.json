@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "policy:test": "node scripts/policy-validator.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -41,6 +42,7 @@
     "@radix-ui/react-tooltip": "^1.1.4",
     "@supabase/supabase-js": "^2.49.10",
     "@tanstack/react-query": "^5.56.2",
+    "ajv": "^8.17.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
