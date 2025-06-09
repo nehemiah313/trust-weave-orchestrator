@@ -71,3 +71,10 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Trust & Policy Features
+
+- **Knowledge Graph**: `src/lib/knowledgeGraph.ts` provides a simple Neo4j traversal that links agent actions to NIST 800-53 compliance rules.
+- **Policy Mutation Model**: `src/lib/policyMutation.ts` implements a reinforcement loop that adjusts policy thresholds based on trust volatility.
+- **Federated Learning Simulation**: `src/lib/federatedLearningSim.ts` shows how three Supabase instances could share model updates without exchanging raw data.
+- **Trust Delta Edge Function**: `supabase/functions/apply-trust-delta` updates agent trust scores and logs policy reevaluation results.
