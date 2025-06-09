@@ -183,7 +183,7 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
     performance_drift: performanceDrift,
     anomaly_score: anomalyScore,
     recent_success_rate: recentSuccessRate,
-    sla_compliance: totalTasks > 0 ? (withinSLA / completedTasks.length) * 100 : 100
+    sla_compliance: completedTasks.length ? (withinSLA / completedTasks.length) * 100 : 0
   }
 }
 
