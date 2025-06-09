@@ -3,6 +3,8 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { 
   Clock, 
   CheckCircle, 
@@ -37,6 +39,81 @@ interface TrustEngineMetricsProps {
   agentName: string;
   trustScore: number;
 }
+
+interface WeeklyDelta {
+  name: string;
+  delta: number;
+}
+
+const WeeklyTrustDelta: React.FC = () => {
+  const sevenDaysAgo = React.useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString();
+  }, []);
+
+  const { data, isLoading } = useQuery<WeeklyDelta[]>({
+    queryKey: ['weekly-trust-delta'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('trust_events')
+        .select('agent_id, delta, created_at, agents(name)')
+        .gte('created_at', sevenDaysAgo);
+
+      if (error) throw error;
+
+      const map: Record<string, WeeklyDelta> = {};
+      data.forEach((event: any) => {
+        const id = event.agent_id as string;
+        if (!map[id]) {
+          map[id] = { name: event.agents?.name || 'Unknown', delta: 0 };
+        }
+        map[id].delta += event.delta;
+      });
+
+      return Object.values(map);
+    },
+  });
+
+  return (
+    <Card className="bg-slate-800/50 border-slate-700">
+      <CardHeader>
+        <CardTitle className="text-white">7-Day Trust Delta</CardTitle>
+        <CardDescription className="text-slate-400">
+          Net trust score change per agent
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-slate-400">Loading...</div>
+        ) : (
+          <div className="space-y-2">
+            {data?.map((agent) => (
+              <div key={agent.name} className="flex items-center justify-between">
+                <span className="text-slate-300">{agent.name}</span>
+                <Badge
+                  variant="outline"
+                  className={`flex items-center space-x-1 ${
+                    agent.delta >= 0
+                      ? 'border-green-400 text-green-400'
+                      : 'border-red-400 text-red-400'
+                  }`}
+                >
+                  {agent.delta >= 0 ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  <span>{agent.delta >= 0 ? '+' : ''}{agent.delta.toFixed(1)}</span>
+                </Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const TrustEngineMetrics: React.FC<TrustEngineMetricsProps> = ({
   metrics,
@@ -251,6 +328,9 @@ const TrustEngineMetrics: React.FC<TrustEngineMetricsProps> = ({
           </CardContent>
         </Card>
       </div>
+
+      {/* Weekly Trust Delta */}
+      <WeeklyTrustDelta />
 
       {/* Future Roadmap Note */}
       <Card className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-blue-700/50">
