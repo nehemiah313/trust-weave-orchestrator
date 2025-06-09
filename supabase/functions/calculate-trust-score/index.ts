@@ -49,12 +49,15 @@ serve(async (req) => {
 
     // Calculate advanced trust metrics
     const trustMetrics = calculateAdvancedTrustMetrics(tasks, trustEvents)
-    
+
     // Apply trust triggers
     const trustAdjustments = applyTrustTriggers(tasks, agent_id)
-    
-    // Calculate final trust score
-    const newTrustScore = calculateFinalTrustScore(trustMetrics, trustAdjustments)
+
+    // Calculate raw trust score from metrics
+    const rawTrustScore = calculateFinalTrustScore(trustMetrics, trustAdjustments)
+
+    // Calculate exponentially decayed score from task history
+    const decayedTrustScore = calculateDecayedTrustScore(tasks)
 
     // Get current agent trust score
     const { data: currentAgent } = await supabaseClient
@@ -64,7 +67,7 @@ serve(async (req) => {
       .single()
 
     const previousScore = currentAgent?.trust_score || 50
-    const finalScore = Math.min(100, Math.max(0, newTrustScore))
+    const finalScore = Math.min(100, Math.max(0, decayedTrustScore))
     const delta = finalScore - previousScore
 
     // Update agent's trust score
@@ -101,8 +104,10 @@ serve(async (req) => {
     console.log(`Trust score updated for agent ${agent_id}: ${previousScore} -> ${finalScore} (Δ${delta.toFixed(2)})`)
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         trust_score: finalScore,
+        raw_trust_score: rawTrustScore,
+        decayed_trust_score: decayedTrustScore,
         delta,
         metrics: trustMetrics,
         adjustments: trustAdjustments,
@@ -278,4 +283,29 @@ function generateTrustEventReason(metrics: any, adjustments: any, delta: number)
   }
   
   return reasons.join('; ')
+}
+
+function calculateDecayedTrustScore(tasks: any[]) {
+  const now = Date.now()
+  const halfLife = 7 * 24 * 60 * 60 * 1000 // 7 days
+  const decayConstant = Math.log(2) / halfLife
+
+  let weightedSuccess = 0
+  let weightedTotal = 0
+
+  tasks.forEach(task => {
+    const created = new Date(task.created_at).getTime()
+    const age = now - created
+    const weight = Math.exp(-decayConstant * age)
+
+    const outcome = task.status === 'completed' ? 1
+      : task.status === 'failed' ? 0
+      : 0.5
+
+    weightedSuccess += outcome * weight
+    weightedTotal += weight
+  })
+
+  if (weightedTotal === 0) return 50
+  return (weightedSuccess / weightedTotal) * 100
 }
