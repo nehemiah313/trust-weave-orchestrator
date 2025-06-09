@@ -1,5 +1,7 @@
 # Welcome to your Lovable project
 
+[![Build & Lint](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/e46ab2fc-34eb-4b54-944f-47954909b06b
