@@ -7,10 +7,12 @@ import { Shield, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'luci
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import TrustEngineMetrics from './TrustEngineMetrics';
+import { rollingMetrics, TrustEvent } from '@/lib/trustWindow';
 
 const TrustEngineMonitor = () => {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [calculationResults, setCalculationResults] = useState<any>(null);
+  const [rollingMetricsState, setRollingMetricsState] = useState<{ movingAverage: number; volatility: number } | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch trust events
@@ -73,10 +75,21 @@ const TrustEngineMonitor = () => {
       });
 
       if (error) throw error;
-      
+
       setCalculationResults(data);
       setSelectedAgent(agentId);
-      
+
+      const { data: windowEvents, error: windowError } = await supabase
+        .from('trust_events')
+        .select('delta, created_at')
+        .eq('agent_id', agentId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (windowError) throw windowError;
+      if (windowEvents) {
+        setRollingMetricsState(rollingMetrics(data.trust_score, windowEvents as TrustEvent[]));
+      }
+
       // Refetch data to show updated scores
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['trust-events'] }),
@@ -106,6 +119,7 @@ const TrustEngineMonitor = () => {
             onClick={() => {
               setSelectedAgent(null);
               setCalculationResults(null);
+              setRollingMetricsState(null);
             }}
             className="text-slate-300 border-slate-600 hover:bg-slate-700"
           >
@@ -126,6 +140,33 @@ const TrustEngineMonitor = () => {
           agentName={agent?.name || 'Unknown Agent'}
           trustScore={calculationResults.trust_score}
         />
+
+        {rollingMetricsState && (
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white">Short-term Trust Trends</CardTitle>
+              <CardDescription className="text-slate-400">
+                Moving average and volatility over last 20 tasks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-white">
+                    {rollingMetricsState.movingAverage.toFixed(1)}%
+                  </div>
+                  <div className="text-slate-400 text-sm">Moving Average</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-white">
+                    {rollingMetricsState.volatility.toFixed(2)}%
+                  </div>
+                  <div className="text-slate-400 text-sm">Volatility</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
