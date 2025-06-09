@@ -125,10 +125,28 @@ serve(async (req) => {
   }
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
   const totalTasks = tasks.length
   const completedTasks = tasks.filter(t => t.status === 'completed')
   const failedTasks = tasks.filter(t => t.status === 'failed')
+
+  const now = Date.now()
+  const DECAY_PERIOD = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+  // Weighted failure rate with exponential decay
+  let weightedFailures = 0
+  let weightedTotal = 0
+  for (const task of tasks) {
+    const age = now - new Date(task.created_at).getTime()
+    const weight = Math.exp(-age / DECAY_PERIOD)
+    weightedTotal += weight
+    if (task.status === 'failed') {
+      weightedFailures += weight
+    }
+  }
+
+  const weightedFailureRate = weightedTotal > 0 ? (weightedFailures / weightedTotal) * 100 : 0
   
   // 1. Latency Analysis
   const completionTimes = completedTasks
@@ -167,26 +185,51 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
 
   // 4. Impersonation Anomaly Detection (unusual pattern detection)
   const trustEventFrequency = trustEvents.length
-  const rapidTrustChanges = trustEvents.filter(event => 
+  const rapidTrustChanges = trustEvents.filter(event =>
     Math.abs(event.delta) > 10 // Large trust changes
   ).length
 
   const anomalyScore = (rapidTrustChanges / Math.max(trustEventFrequency, 1)) * 100
 
+  // 5. Trust volatility within sliding window
+  const VOL_WINDOW = 7 * 24 * 60 * 60 * 1000 // 7 days window
+  const VOL_DECAY = 24 * 60 * 60 * 1000       // 1 day decay
+  const windowEvents = trustEvents.filter(event =>
+    new Date(event.created_at).getTime() >= (now - VOL_WINDOW)
+  )
+
+  let volWeightSum = 0
+  let volWeightedDelta = 0
+  let volWeightedDeltaSq = 0
+  for (const event of windowEvents) {
+    const age = now - new Date(event.created_at).getTime()
+    const w = Math.exp(-age / VOL_DECAY)
+    volWeightSum += w
+    volWeightedDelta += event.delta * w
+    volWeightedDeltaSq += (event.delta ** 2) * w
+  }
+
+  const meanDelta = volWeightSum > 0 ? volWeightedDelta / volWeightSum : 0
+  const variance = volWeightSum > 0 ? (volWeightedDeltaSq / volWeightSum) - (meanDelta ** 2) : 0
+  const trustVolatility = Math.sqrt(Math.max(variance, 0))
+
   return {
     total_tasks: totalTasks,
     completion_rate: completionRate,
     failure_rate: failureRate,
+    weighted_failure_rate: weightedFailureRate,
     avg_latency_ms: avgLatency,
     within_sla_count: withinSLA,
     delayed_tasks_count: delayedTasks,
     performance_drift: performanceDrift,
+    trust_volatility: trustVolatility,
     anomaly_score: anomalyScore,
     recent_success_rate: recentSuccessRate,
     sla_compliance: totalTasks > 0 ? (withinSLA / completedTasks.length) * 100 : 100
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyTrustTriggers(tasks: any[], agentId: string) {
   const fiveMinutesAgo = new Date()
   fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5)
@@ -231,21 +274,26 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
   return adjustments
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function calculateFinalTrustScore(metrics: any, adjustments: any) {
   // Base score calculation with weighted factors
   const latencyScore = Math.max(0, 100 - (metrics.avg_latency_ms / (5 * 60 * 1000)) * 50) // Penalize latency
   const completionScore = metrics.completion_rate
   const consistencyScore = Math.max(0, 100 - metrics.performance_drift * 2) // Penalize drift
+  const failureScore = Math.max(0, 100 - metrics.weighted_failure_rate * 2)
+  const volatilityScore = Math.max(0, 100 - metrics.trust_volatility * 5)
   const anomalyScore = Math.max(0, 100 - metrics.anomaly_score) // Penalize anomalies
   const slaScore = metrics.sla_compliance
 
   // Weighted average of all factors
   const baseScore = (
-    latencyScore * 0.25 +      // Latency weight: 25%
-    completionScore * 0.30 +   // Completion rate weight: 30%
-    consistencyScore * 0.20 +  // Consistency weight: 20%
+    latencyScore * 0.20 +      // Latency weight: 20%
+    completionScore * 0.25 +   // Completion rate weight: 25%
+    consistencyScore * 0.15 +  // Consistency weight: 15%
+    failureScore * 0.05 +      // Weighted failure penalty: 5%
+    volatilityScore * 0.05 +   // Trust volatility penalty: 5%
     anomalyScore * 0.15 +      // Anomaly detection weight: 15%
-    slaScore * 0.10            // SLA compliance weight: 10%
+    slaScore * 0.15            // SLA compliance weight: 15%
   )
 
   // Apply trigger adjustments
@@ -254,6 +302,7 @@ function calculateFinalTrustScore(metrics: any, adjustments: any) {
   return Math.min(100, Math.max(0, adjustedScore))
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generateTrustEventReason(metrics: any, adjustments: any, delta: number) {
   const reasons = []
   
@@ -268,11 +317,19 @@ function generateTrustEventReason(metrics: any, adjustments: any, delta: number)
   if (metrics.performance_drift > 20) {
     reasons.push(`Detected performance drift: ${metrics.performance_drift.toFixed(1)}%`)
   }
-  
+
   if (metrics.anomaly_score > 30) {
     reasons.push(`Anomaly detected: score ${metrics.anomaly_score.toFixed(1)}`)
   }
-  
+
+  if (metrics.trust_volatility > 10) {
+    reasons.push(`High trust volatility: ${metrics.trust_volatility.toFixed(1)}`)
+  }
+
+  if (metrics.weighted_failure_rate > 20) {
+    reasons.push(`Recent failures impacting trust: ${metrics.weighted_failure_rate.toFixed(1)}%`)
+  }
+
   if (reasons.length === 0) {
     reasons.push(`Routine recalculation based on ${metrics.total_tasks} recent tasks`)
   }
