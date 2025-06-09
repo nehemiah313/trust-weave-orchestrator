@@ -328,6 +328,7 @@ export type Database = {
           event_type: Database["public"]["Enums"]["event_type"]
           id: string
           metadata: Json | null
+          trigger_metadata: Json | null
           reason: string | null
           task_id: string | null
         }
@@ -338,6 +339,7 @@ export type Database = {
           event_type: Database["public"]["Enums"]["event_type"]
           id?: string
           metadata?: Json | null
+          trigger_metadata?: Json | null
           reason?: string | null
           task_id?: string | null
         }
@@ -348,6 +350,7 @@ export type Database = {
           event_type?: Database["public"]["Enums"]["event_type"]
           id?: string
           metadata?: Json | null
+          trigger_metadata?: Json | null
           reason?: string | null
           task_id?: string | null
         }

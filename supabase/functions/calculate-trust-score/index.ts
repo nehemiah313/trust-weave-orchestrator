@@ -2,6 +2,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const PATENT_CLAIM_MAP = {
+  delayed_tasks_penalty: 'claim_001',
+  sla_compliance_bonus: 'claim_002',
+} as const
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -91,22 +96,24 @@ serve(async (req) => {
         event_type: eventType,
         delta,
         reason,
-        metadata: { 
+        metadata: {
           ...trustMetrics,
           adjustments: trustAdjustments,
           calculation_timestamp: new Date().toISOString()
-        }
+        },
+        trigger_metadata: trustAdjustments.trigger_metadata
       })
 
     console.log(`Trust score updated for agent ${agent_id}: ${previousScore} -> ${finalScore} (Δ${delta.toFixed(2)})`)
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         trust_score: finalScore,
         delta,
         metrics: trustMetrics,
         adjustments: trustAdjustments,
-        reason
+        reason,
+        trigger_metadata: trustAdjustments.trigger_metadata
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -199,7 +206,8 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
   const adjustments = {
     delayed_penalty: 0,
     sla_bonus: 0,
-    trigger_applied: []
+    trigger_applied: [],
+    trigger_metadata: [] as { rule: string; claim_id: string; details: Record<string, unknown> }[]
   }
 
   // Trigger 1: Trust ↓ if 3+ delayed tasks in 5 min
@@ -212,6 +220,11 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
   if (recentDelayedTasks.length >= 3) {
     adjustments.delayed_penalty = -15 // Significant penalty
     adjustments.trigger_applied.push('delayed_tasks_penalty')
+    adjustments.trigger_metadata.push({
+      rule: 'delayed_tasks_penalty',
+      claim_id: PATENT_CLAIM_MAP.delayed_tasks_penalty,
+      details: { delayed_tasks: recentDelayedTasks.length }
+    })
     console.log(`Applied delayed tasks penalty for agent ${agentId}: ${recentDelayedTasks.length} delayed tasks`)
   }
 
@@ -225,6 +238,11 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
   if (recentCompletedWithinSLA.length >= 5) {
     adjustments.sla_bonus = 10 // Reward for excellent performance
     adjustments.trigger_applied.push('sla_compliance_bonus')
+    adjustments.trigger_metadata.push({
+      rule: 'sla_compliance_bonus',
+      claim_id: PATENT_CLAIM_MAP.sla_compliance_bonus,
+      details: { tasks_within_sla: recentCompletedWithinSLA.length }
+    })
     console.log(`Applied SLA compliance bonus for agent ${agentId}: ${recentCompletedWithinSLA.length} tasks within SLA`)
   }
 
