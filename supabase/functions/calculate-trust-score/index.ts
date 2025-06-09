@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import IsolationForest from 'https://esm.sh/ml-isolation-forest@0.1.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,9 +166,27 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
 
   const performanceDrift = Math.abs(recentSuccessRate - olderSuccessRate)
 
-  // 4. Impersonation Anomaly Detection (unusual pattern detection)
+  // 4. Isolation Forest anomaly detection on latency and trust delta
+  const featureData = tasks
+    .filter(t => t.assigned_at && t.completed_at)
+    .map(t => {
+      const latency = new Date(t.completed_at).getTime() - new Date(t.assigned_at).getTime()
+      const delta = typeof t.trust_score_delta === 'number' ? t.trust_score_delta : 0
+      return [latency, delta]
+    })
+
+  let isolationAnomalyRatio = 0
+  if (featureData.length >= 5) {
+    const forest = new IsolationForest()
+    forest.train(featureData)
+    const scores = forest.predict(featureData)
+    const anomalies = scores.filter(s => s > 0.7).length
+    isolationAnomalyRatio = (anomalies / scores.length) * 100
+  }
+
+  // 5. Impersonation Anomaly Detection (unusual pattern detection)
   const trustEventFrequency = trustEvents.length
-  const rapidTrustChanges = trustEvents.filter(event => 
+  const rapidTrustChanges = trustEvents.filter(event =>
     Math.abs(event.delta) > 10 // Large trust changes
   ).length
 
@@ -182,6 +201,7 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
     delayed_tasks_count: delayedTasks,
     performance_drift: performanceDrift,
     anomaly_score: anomalyScore,
+    isolation_anomaly_ratio: isolationAnomalyRatio,
     recent_success_rate: recentSuccessRate,
     sla_compliance: totalTasks > 0 ? (withinSLA / completedTasks.length) * 100 : 100
   }
@@ -238,6 +258,7 @@ function calculateFinalTrustScore(metrics: any, adjustments: any) {
   const consistencyScore = Math.max(0, 100 - metrics.performance_drift * 2) // Penalize drift
   const anomalyScore = Math.max(0, 100 - metrics.anomaly_score) // Penalize anomalies
   const slaScore = metrics.sla_compliance
+  const isoPenalty = metrics.isolation_anomaly_ratio > 20 ? -5 : 0
 
   // Weighted average of all factors
   const baseScore = (
@@ -249,7 +270,7 @@ function calculateFinalTrustScore(metrics: any, adjustments: any) {
   )
 
   // Apply trigger adjustments
-  const adjustedScore = baseScore + adjustments.delayed_penalty + adjustments.sla_bonus
+  const adjustedScore = baseScore + adjustments.delayed_penalty + adjustments.sla_bonus + isoPenalty
 
   return Math.min(100, Math.max(0, adjustedScore))
 }
@@ -271,6 +292,10 @@ function generateTrustEventReason(metrics: any, adjustments: any, delta: number)
   
   if (metrics.anomaly_score > 30) {
     reasons.push(`Anomaly detected: score ${metrics.anomaly_score.toFixed(1)}`)
+  }
+
+  if (metrics.isolation_anomaly_ratio > 20) {
+    reasons.push(`Isolation Forest flagged ${metrics.isolation_anomaly_ratio.toFixed(1)}% anomalies`)
   }
   
   if (reasons.length === 0) {
