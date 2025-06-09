@@ -25,6 +25,7 @@ interface TrustMetrics {
   anomaly_score: number;
   recent_success_rate: number;
   sla_compliance: number;
+  trust_score_7d_delta: number;
 }
 
 interface TrustEngineMetricsProps {
@@ -89,7 +90,7 @@ const TrustEngineMetrics: React.FC<TrustEngineMetricsProps> = ({
       </div>
 
       {/* Trust Factors Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Latency Factor */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -160,10 +161,30 @@ const TrustEngineMetrics: React.FC<TrustEngineMetricsProps> = ({
             <div className={`text-sm ${anomalyStatus.color}`}>
               {anomalyStatus.level}
             </div>
-            <Progress 
-              value={Math.max(0, 100 - metrics.anomaly_score)} 
-              className="mt-2" 
+            <Progress
+              value={Math.max(0, 100 - metrics.anomaly_score)}
+              className="mt-2"
             />
+          </CardContent>
+        </Card>
+
+        {/* 7d Trust Delta */}
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-300">7d Delta</CardTitle>
+            {metrics.trust_score_7d_delta >= 0 ? (
+              <TrendingUp className="h-4 w-4 text-green-400" />
+            ) : (
+              <TrendingDown className="h-4 w-4 text-red-400" />
+            )}
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${
+              metrics.trust_score_7d_delta >= 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {metrics.trust_score_7d_delta > 0 ? '+' : ''}{metrics.trust_score_7d_delta.toFixed(1)}
+            </div>
+            <div className="text-sm text-slate-400">last 7 days</div>
           </CardContent>
         </Card>
       </div>
