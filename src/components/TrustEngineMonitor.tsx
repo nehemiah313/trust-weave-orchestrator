@@ -8,9 +8,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import TrustEngineMetrics from './TrustEngineMetrics';
 
+interface TrustCalculationResults {
+  metrics: Record<string, unknown>;
+  adjustments: { delayed_penalty: number; sla_bonus: number; trigger_applied: string[] };
+  trust_score: number;
+  delta: number;
+  reason: string;
+}
+
 const TrustEngineMonitor = () => {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [calculationResults, setCalculationResults] = useState<any>(null);
+  const [calculationResults, setCalculationResults] = useState<TrustCalculationResults | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch trust events
