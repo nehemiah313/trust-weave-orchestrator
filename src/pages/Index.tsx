@@ -9,6 +9,7 @@ import AgentConsole from '@/components/AgentConsole';
 import TaskRoutingDashboard from '@/components/TaskRoutingDashboard';
 import AuditExplorer from '@/components/AuditExplorer';
 import TrustEngineMonitor from '@/components/TrustEngineMonitor';
+import TrustAudit from '@/components/TrustAudit';
 import BillingOverview from '@/components/BillingOverview';
 import DemoScenarios from '@/components/DemoScenarios';
 import { Shield, Cpu, Network, DollarSign, FileText, Play } from 'lucide-react';
@@ -145,6 +146,7 @@ const Index = () => {
 
             <TabsContent value="audit" className="space-y-6">
               <AuditExplorer />
+              <TrustAudit />
             </TabsContent>
 
             <TabsContent value="billing" className="space-y-6">
