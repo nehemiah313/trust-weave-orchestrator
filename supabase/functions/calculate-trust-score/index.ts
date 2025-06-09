@@ -2,6 +2,36 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+interface Task {
+  status: string
+  assigned_at: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+interface TrustEvent {
+  delta: number
+}
+
+interface TrustMetrics {
+  total_tasks: number
+  completion_rate: number
+  failure_rate: number
+  avg_latency_ms: number
+  within_sla_count: number
+  delayed_tasks_count: number
+  performance_drift: number
+  anomaly_score: number
+  recent_success_rate: number
+  sla_compliance: number
+}
+
+interface TrustAdjustments {
+  delayed_penalty: number
+  sla_bonus: number
+  trigger_applied: string[]
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -125,7 +155,7 @@ serve(async (req) => {
   }
 })
 
-function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
+function calculateAdvancedTrustMetrics(tasks: Task[], trustEvents: TrustEvent[]): TrustMetrics {
   const totalTasks = tasks.length
   const completedTasks = tasks.filter(t => t.status === 'completed')
   const failedTasks = tasks.filter(t => t.status === 'failed')
@@ -187,7 +217,7 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
   }
 }
 
-function applyTrustTriggers(tasks: any[], agentId: string) {
+function applyTrustTriggers(tasks: Task[], agentId: string): TrustAdjustments {
   const fiveMinutesAgo = new Date()
   fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5)
 
@@ -196,7 +226,7 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
     new Date(task.created_at) >= fiveMinutesAgo
   )
 
-  const adjustments = {
+  const adjustments: TrustAdjustments = {
     delayed_penalty: 0,
     sla_bonus: 0,
     trigger_applied: []
@@ -231,7 +261,7 @@ function applyTrustTriggers(tasks: any[], agentId: string) {
   return adjustments
 }
 
-function calculateFinalTrustScore(metrics: any, adjustments: any) {
+function calculateFinalTrustScore(metrics: TrustMetrics, adjustments: TrustAdjustments) {
   // Base score calculation with weighted factors
   const latencyScore = Math.max(0, 100 - (metrics.avg_latency_ms / (5 * 60 * 1000)) * 50) // Penalize latency
   const completionScore = metrics.completion_rate
@@ -254,7 +284,7 @@ function calculateFinalTrustScore(metrics: any, adjustments: any) {
   return Math.min(100, Math.max(0, adjustedScore))
 }
 
-function generateTrustEventReason(metrics: any, adjustments: any, delta: number) {
+function generateTrustEventReason(metrics: TrustMetrics, adjustments: TrustAdjustments, delta: number) {
   const reasons = []
   
   if (adjustments.trigger_applied.includes('delayed_tasks_penalty')) {

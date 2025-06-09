@@ -21,12 +21,48 @@ import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 
+interface Agent {
+  id: string;
+  name: string;
+  protocol: string;
+  trust_score: number;
+  [key: string]: unknown;
+}
+
+interface TaskCreatedData {
+  task_id: string;
+  agent: Agent;
+  status: string;
+  [key: string]: unknown;
+}
+
+type OrchestrationResult =
+  | { type: 'agent_selection'; data: { protocol: string; agent?: Agent } }
+  | { type: 'task_created'; data: TaskCreatedData };
+
+type TrustDriftResult =
+  | { type: 'reassignment'; from_agent: string; to_agent: string; reason: string }
+  | { task: number; trust_score: number; delta: number; reason: string };
+
+interface BillingData {
+  tasks: TaskCreatedData[];
+  billing_events: { total_amount?: number; [key: string]: unknown }[];
+  audit_logs: Record<string, unknown>[];
+}
+
+type DemoData = OrchestrationResult[] | TrustDriftResult[] | BillingData;
+
+interface DemoResults {
+  scenario: 'orchestration' | 'trust_drift' | 'billing';
+  data: DemoData;
+}
+
 const DemoScenarios = () => {
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [scenarioProgress, setScenarioProgress] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [naturalLanguageInput, setNaturalLanguageInput] = useState('');
-  const [demoResults, setDemoResults] = useState<any>(null);
+  const [demoResults, setDemoResults] = useState<DemoResults | null>(null);
   const queryClient = useQueryClient();
 
   // Demo user ID for scenarios
@@ -420,7 +456,7 @@ const DemoScenarios = () => {
             <div className="space-y-4">
               {demoResults.scenario === 'orchestration' && (
                 <div className="space-y-3">
-                  {demoResults.data.map((result: any, index: number) => (
+                  {(demoResults.data as OrchestrationResult[]).map((result, index) => (
                     <div key={index} className="p-3 bg-slate-700/30 rounded-lg">
                       {result.type === 'agent_selection' && (
                         <div>
@@ -449,7 +485,7 @@ const DemoScenarios = () => {
 
               {demoResults.scenario === 'trust_drift' && (
                 <div className="space-y-3">
-                  {demoResults.data.map((result: any, index: number) => (
+                  {(demoResults.data as TrustDriftResult[]).map((result, index) => (
                     <div key={index} className="p-3 bg-slate-700/30 rounded-lg">
                       {result.type === 'reassignment' ? (
                         <div>
@@ -491,7 +527,7 @@ const DemoScenarios = () => {
                   <div>
                     <h4 className="text-white font-semibold mb-2">Billing Summary</h4>
                     <div className="space-y-2">
-                      {demoResults.data.billing_events.map((billing: any, index: number) => (
+                      {(demoResults.data as BillingData).billing_events.map((billing, index) => (
                         <div key={index} className="flex justify-between p-2 bg-slate-700/30 rounded">
                           <span className="text-slate-300">Task {index + 1}</span>
                           <span className="text-green-400 font-mono">
@@ -502,7 +538,12 @@ const DemoScenarios = () => {
                       <div className="flex justify-between pt-2 border-t border-slate-600">
                         <span className="text-white font-semibold">Total</span>
                         <span className="text-green-400 font-semibold">
-                          ${demoResults.data.billing_events.reduce((sum: number, b: any) => sum + (b.total_amount || 0), 0).toFixed(2)}
+                          ${
+                            (demoResults.data as BillingData).billing_events.reduce(
+                              (sum, b) => sum + (b.total_amount || 0),
+                              0
+                            ).toFixed(2)
+                          }
                         </span>
                       </div>
                     </div>

@@ -12,6 +12,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 
+interface TaskData {
+  protocol: string;
+  task_type: string;
+  input_data: { description: string };
+  user_id: string;
+}
+
 const TaskRoutingDashboard = () => {
   const [taskInput, setTaskInput] = useState('');
   const [selectedProtocol, setSelectedProtocol] = useState('');
@@ -35,7 +42,7 @@ const TaskRoutingDashboard = () => {
 
   // Create task mutation
   const createTaskMutation = useMutation({
-    mutationFn: async (taskData: any) => {
+    mutationFn: async (taskData: TaskData) => {
       const response = await supabase.functions.invoke('assign-agent-task', {
         body: taskData
       });
