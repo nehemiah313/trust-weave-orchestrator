@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -36,11 +36,53 @@ const TrustEngineMonitor = () => {
         .from('agents')
         .select('*')
         .order('trust_score', { ascending: false });
-      
+
       if (error) throw error;
       return data;
     },
   });
+
+  // Fetch trust deltas for last 7 days
+  const { data: trustDeltas } = useQuery({
+    queryKey: ['trust-deltas'],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('trust_events')
+        .select('agent_id, delta')
+        .gte('created_at', since);
+
+      if (error) throw error;
+
+      return data?.reduce<Record<string, number>>((acc, event) => {
+        if (event.agent_id) {
+          acc[event.agent_id] = (acc[event.agent_id] || 0) + (event.delta || 0);
+        }
+        return acc;
+      }, {}) || {};
+    },
+  });
+
+  const loggedAgents = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!agents || !trustDeltas) return;
+
+    const threshold = -10; // significant drop
+    agents.forEach((agent) => {
+      const delta = trustDeltas[agent.id] || 0;
+      if (delta <= threshold && !loggedAgents.current.has(agent.id)) {
+        supabase.from('billing_events').insert({
+          agent_id: agent.id,
+          amount: 0,
+          currency: 'USD',
+          fee_type: 'compliance',
+          metadata: { reason: 'trust_drop_7d', delta },
+        });
+        loggedAgents.current.add(agent.id);
+      }
+    });
+  }, [agents, trustDeltas]);
 
   const getEventIcon = (eventType: string, delta: number) => {
     if (delta > 0) return <TrendingUp className="w-4 h-4 text-green-400" />;
@@ -192,9 +234,10 @@ const TrustEngineMonitor = () => {
             <div className="space-y-4">
               {agents?.map((agent, index) => {
                 const trustLevel = getTrustLevel(agent.trust_score);
+                const delta = trustDeltas ? trustDeltas[agent.id] || 0 : 0;
                 return (
-                  <div 
-                    key={agent.id} 
+                  <div
+                    key={agent.id}
                     className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 cursor-pointer transition-colors"
                     onClick={() => calculateTrustScore(agent.id)}
                   >
@@ -212,9 +255,10 @@ const TrustEngineMonitor = () => {
                     <div className="flex items-center space-x-3">
                       <div className="text-right">
                         <div className="text-white font-bold">{agent.trust_score}%</div>
-                        <div className={`text-sm ${trustLevel.color}`}>
-                          {trustLevel.label}
-                        </div>
+                        <div className={`text-sm ${trustLevel.color}`}>{trustLevel.label}</div>
+                        <div className={`text-xs ${
+                          delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-slate-400'
+                        }`}>Δ7d {delta > 0 ? '+' : ''}{delta.toFixed(1)}</div>
                       </div>
                       <Progress value={agent.trust_score} className="w-16" />
                     </div>
