@@ -36,9 +36,30 @@ const TrustEngineMonitor = () => {
         .from('agents')
         .select('*')
         .order('trust_score', { ascending: false });
-      
+
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Fetch 7d trust deltas
+  const { data: trustDeltas } = useQuery({
+    queryKey: ['trust-delta-7d'],
+    queryFn: async () => {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const { data, error } = await supabase
+        .from('trust_events')
+        .select('agent_id, delta, created_at')
+        .gte('created_at', sevenDaysAgo.toISOString());
+
+      if (error) throw error;
+
+      return data.reduce<Record<string, number>>((acc, event) => {
+        if (!event.agent_id) return acc;
+        acc[event.agent_id] = (acc[event.agent_id] || 0) + event.delta;
+        return acc;
+      }, {});
     },
   });
 
@@ -212,8 +233,18 @@ const TrustEngineMonitor = () => {
                     <div className="flex items-center space-x-3">
                       <div className="text-right">
                         <div className="text-white font-bold">{agent.trust_score}%</div>
-                        <div className={`text-sm ${trustLevel.color}`}>
-                          {trustLevel.label}
+                        <div className={`text-sm ${trustLevel.color}`}>{trustLevel.label}</div>
+                        <div className="flex items-center justify-end space-x-1">
+                          {(trustDeltas?.[agent.id] || 0) >= 0 ? (
+                            <TrendingUp className="w-3 h-3 text-green-400" />
+                          ) : (
+                            <TrendingDown className="w-3 h-3 text-red-400" />
+                          )}
+                          <span className={`font-mono text-xs ${
+                            (trustDeltas?.[agent.id] || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {(trustDeltas?.[agent.id] || 0) >= 0 ? '+' : ''}{(trustDeltas?.[agent.id] || 0).toFixed(1)}
+                          </span>
                         </div>
                       </div>
                       <Progress value={agent.trust_score} className="w-16" />

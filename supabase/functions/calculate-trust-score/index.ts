@@ -173,6 +173,12 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
 
   const anomalyScore = (rapidTrustChanges / Math.max(trustEventFrequency, 1)) * 100
 
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const trustScore7dDelta = trustEvents
+    .filter(event => new Date(event.created_at).getTime() >= sevenDaysAgo.getTime())
+    .reduce((sum, event) => sum + event.delta, 0)
+
   return {
     total_tasks: totalTasks,
     completion_rate: completionRate,
@@ -183,7 +189,8 @@ function calculateAdvancedTrustMetrics(tasks: any[], trustEvents: any[]) {
     performance_drift: performanceDrift,
     anomaly_score: anomalyScore,
     recent_success_rate: recentSuccessRate,
-    sla_compliance: totalTasks > 0 ? (withinSLA / completedTasks.length) * 100 : 100
+    sla_compliance: totalTasks > 0 ? (withinSLA / completedTasks.length) * 100 : 100,
+    trust_score_7d_delta: trustScore7dDelta
   }
 }
 
